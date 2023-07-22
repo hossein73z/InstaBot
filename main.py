@@ -1,15 +1,15 @@
 import re
-import traceback
 
 import instaloader
 import telegram.error
-from instaloader import TwoFactorAuthRequiredException, Post, BadCredentialsException
+from instaloader import Post
 from telegram import Update
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
 from Functions.Coloring import red, magenta, yellow
-from Functions.DatabaseCRUD import init, read, edit, add
+from Functions.DatabaseCRUD import init, read, edit
 from Functions.PersonFunctions import check_person
+from Functions.Progresses import check_progress
 from MyObjects import Setting, Person
 
 
@@ -25,93 +25,10 @@ async def process(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             # User have unfinished progress
             progress = person.progress
 
-            if progress["name"] == 'INS_REG':
-                # User is in the middle of registering instagram account
-
-                if progress["value"] == "INS_UNAME":
-                    # Received text must be user's instagram username
-                    progress = {"name": "INS_REG", "value": "INS_PASS"}
-                    edit(Person, person.id, progress=progress, insta_username=update.message.text)
-
-                    text = "Now send me your password."
-                    await context.bot.send_message(chat_id=person.chat_id, text=text)  # Ask for user password
-
-                elif progress["value"] == "INS_PASS":
-                    # Received text must be user password
-
-                    loader = instaloader.Instaloader()
-                    try:
-                        # Try to log in with the given credentials
-
-                        loader.login(person.insta_username, update.message.text)
-                        text = "Login successful."
-                        await context.bot.send_message(chat_id=person.chat_id, text=text)
-                        edit(Person, person.id, progress=None, session=loader.save_session())
-
-                    except TwoFactorAuthRequiredException:
-                        # User have 2FA enabled
-
-                        text = "You have two-factor-authentication enabled for yor account.\n" \
-                               "If you have an authenticator app, get the code from it and write it here.\n" \
-                               "Otherwise a code would be sent to you by SMS."
-
-                        # Ask user for 2FA code
-                        await context.bot.send_message(chat_id=person.chat_id, text=text)
-
-                        progress = {"name": "INS_REG", "value": "INS_2FA", "pass": update.message.text}
-                        edit(Person, id=person.id, progress=progress)
-
-                    except BadCredentialsException:
-                        # User and password doesn't match
-
-                        edit(Person, person.id, progress={"name": "INS_REG", "value": "INS_UNAME"})
-
-                        text = "Username and password doesn't match. Try again.\n\n" \
-                               "Send me your Username again please."
-                        await context.bot.send_message(chat_id=person.chat_id, text=text)
-
-                    finally:
-                        loader.close()
-                        await context.bot.deleteMessage(chat_id=person.chat_id, message_id=update.message.id)
-
-                elif progress['value'] == "INS_2FA":
-                    # Received text must be 2FA code
-
-                    loader = instaloader.Instaloader()
-                    try:
-                        # Try to log in with the given credentials
-
-                        loader.login(person.insta_username, progress['pass'])
-                        text = "Login successful."
-                        await context.bot.send_message(chat_id=person.chat_id, text=text)
-                        edit(Person, person.id, progress=None, session=loader.save_session())
-
-                    except TwoFactorAuthRequiredException:
-                        try:
-                            # Try to log in with given 2FA code
-
-                            loader.two_factor_login(update.message.text)
-
-                            # Log in successful
-                            await context.bot.send_message(chat_id=person.chat_id, text="Login successful.")
-                            edit(Person, id=person.id, progress=None, session=loader.save_session())
-
-                        except BadCredentialsException:
-                            # Wrong 2FA code
-
-                            text = "Wrong two-factor-authentication code. Try again.\n\n" \
-                                   "Get a new one and send it here please."
-
-                            # Ask user for 2FA code again
-                            await context.bot.send_message(chat_id=person.chat_id, text=text)
-
-                    except BadCredentialsException:
-                        # User and password doesn't match
-
-                        text = "Username and password doesn't match. Try again.\n\n" \
-                               "Send me your Username again please."
-                        await context.bot.send_message(chat_id=person.chat_id, text=text)
-                        edit(Person, person.id, progress={"name": "INS_REG", "value": "INS_UNAME"}, insta_username=None)
+            text = check_progress(progress, person, update)
+            await context.bot.send_message(chat_id=person.chat_id, text=text)
+            if progress["name"] == 'INS_REG' and progress["value"] == "INS_PASS":
+                await context.bot.deleteMessage(chat_id=person.chat_id, message_id=update.message.id)
 
         else:
             re_match = re.match(
