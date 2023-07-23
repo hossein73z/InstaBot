@@ -20,8 +20,8 @@ async def process(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     person = check_person(user)
     edit(Person, id=person.id, first_name=user.first_name, last_name=user.last_name, username=user.username)
 
-    if person.progress:
-        # User have unfinished progress
+    if person.progress:  # -------------------- User have unfinished progress
+
         progress = person.progress
 
         text = check_progress(progress, person, update)
@@ -36,21 +36,22 @@ async def process(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             except Exception as e:
                 print('main: ' + red(str(e)))
 
-    else:
+    else:  # -------------------- User have no unfinished progress
         re_match = re.match(
             r"(?:https?://)?(?:www.)?instagram.com/?([a-zA-Z0-9._\-]+)?/(p+)?([rel]+)?([tv]+)?([storie]+)?/([a-zA-Z0-9\-_.]+)/?([0-9]+)?",
             update.message.text)
 
-        if re_match:
-            shortcode = re_match.group(6)
-            print(yellow("Shortcode: ") + shortcode)
+        if re_match:  # -------------------- The received message is an instagram link
 
-            if person.session:
+            # Group number 6 of regex match is usually the shortcode
+            group6 = re_match.group(6)
+            print(yellow("Shortcode: ") + group6)
+
+            if person.session:  # -------------------- Check if user already logged in
                 loader = instaloader.Instaloader()
                 loader.load_session(username=person.insta_username, session_data=person.session)
                 try:
-                    post = Post.from_shortcode(loader.context, shortcode=shortcode)
-                    # loader.download_post(post, person.id)
+                    post = Post.from_shortcode(loader.context, shortcode=group6)
 
                     if post.typename == "GraphSidecar":
                         for item in post.get_sidecar_nodes():
@@ -65,6 +66,8 @@ async def process(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                                                     reply_to_message_id=update.message.id)
                         await context.bot.send_photo(chat_id=person.chat_id, photo=post.url,
                                                      reply_to_message_id=update.message.id)
+                    else:
+                        print(post.typename)
 
                 except ConnectionException:
                     await context.bot.send_message(chat_id=person.chat_id,
@@ -76,6 +79,9 @@ async def process(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 except Exception as e:
                     print('main: ' + red(str(e)))
 
+                finally:
+                    loader.close()
+
             else:
                 text = "To use this bot you must first login with your instagram account.\n" \
                        "Please send me your instagram username."
@@ -84,7 +90,8 @@ async def process(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 await context.bot.send_message(chat_id=person.chat_id, text=text)
 
                 edit(Person, person.id, progress={"name": "INS_REG", "value": "INS_UNAME"})
-        else:
+
+        else:  # -------------------- The received message is not an instagram link
             text = "I didn't understand. Please just send me a link to instagram media."
             await context.bot.send_message(chat_id=person.chat_id, text=text)
 
