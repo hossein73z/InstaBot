@@ -1,4 +1,4 @@
-from instaloader import instaloader, BadCredentialsException, TwoFactorAuthRequiredException
+from instaloader import instaloader, BadCredentialsException, TwoFactorAuthRequiredException, ConnectionException
 from telegram import Update
 
 from Functions.DatabaseCRUD import edit
@@ -34,7 +34,7 @@ def check_progress(progress: dict, person: Person, update: Update) -> str:
                        "If you have an authenticator app, get the code from it and write it here.\n" \
                        "Otherwise a code would be sent to you by SMS."
 
-            except BadCredentialsException:  # -------------------- User and password doesn't match
+            except BadCredentialsException and ConnectionException:  # -------------------- User and password doesn't match
 
                 edit(Person, person.id, progress={"name": "INS_REG", "value": "INS_UNAME"})
                 return "Username and password doesn't match. Try again.\n\nSend me your Username again please."

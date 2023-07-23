@@ -1,4 +1,5 @@
 import re
+import traceback
 
 import instaloader
 import telegram.error
@@ -52,6 +53,8 @@ async def process(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 loader.load_session(username=person.insta_username, session_data=person.session)
                 try:
                     post = Post.from_shortcode(loader.context, shortcode=group6)
+                    if post.caption:
+                        await context.bot.send_message(chat_id=person.chat_id, text=post.caption)
 
                     if post.typename == "GraphSidecar":
                         for item in post.get_sidecar_nodes():
@@ -62,10 +65,12 @@ async def process(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                                 await context.bot.send_photo(chat_id=person.chat_id, photo=item.display_url,
                                                              reply_to_message_id=update.message.id)
                     elif post.typename == "GraphVideo":
-                        await context.bot.sendVideo(chat_id=person.chat_id, video=post.video_url,
-                                                    reply_to_message_id=update.message.id)
+
                         await context.bot.send_photo(chat_id=person.chat_id, photo=post.url,
                                                      reply_to_message_id=update.message.id)
+                        await context.bot.sendVideo(chat_id=person.chat_id, video=post.video_url,
+                                                    reply_to_message_id=update.message.id)
+
                     else:
                         print(post.typename)
 
