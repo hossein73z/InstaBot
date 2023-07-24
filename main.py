@@ -3,7 +3,7 @@ import re
 import instaloader
 import telegram.error
 from instaloader import Post, ConnectionException
-from telegram import Update
+from telegram import Update, InputMediaPhoto, InputMediaVideo
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
 from Functions.Coloring import red, magenta, yellow
@@ -54,36 +54,55 @@ async def process(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 loader.load_session(username=person.insta_username, session_data=person.session)
                 try:
                     post = Post.from_shortcode(loader.context, shortcode=group6)
-                    if post.caption:
-                        await context.bot.send_message(chat_id=person.chat_id, text=post.caption)
 
                     if post.typename == "GraphSidecar":
-                        for item in post.get_sidecar_nodes():
-                            if item.is_video:
-                                await context.bot.sendVideo(chat_id=person.chat_id, video=item.video_url,
-                                                            reply_to_message_id=update.message.id)
-                            else:
-                                await context.bot.send_photo(chat_id=person.chat_id, photo=item.display_url,
-                                                             reply_to_message_id=update.message.id)
-                    elif post.typename == "GraphVideo":
+                        # -------------------- Received link was an album
 
-                        await context.bot.send_photo(chat_id=person.chat_id, photo=post.url,
-                                                     reply_to_message_id=update.message.id)
-                        await context.bot.sendVideo(chat_id=person.chat_id, video=post.video_url,
-                                                    reply_to_message_id=update.message.id)
+                        # Create media group list
+                        slides = [
+                            InputMediaVideo(media=item.video_url)
+                            if item.is_video
+                            else InputMediaPhoto(media=item.display_url)
+                            for item in post.get_sidecar_nodes()
+                        ]
+
+                        if slides:
+                            await context.bot.send_media_group(
+                                chat_id=person.chat_id,
+                                media=slides,
+                                reply_to_message_id=update.message.id,
+                                caption=post.caption)
+
+                    elif post.typename == "GraphVideo":
+                        # -------------------- Received link was a video
+
+                        # Create media group from video and its thumbnail
+                        slides = [InputMediaPhoto(media=post.url), InputMediaVideo(media=post.video_url)]
+                        await context.bot.send_media_group(
+                            chat_id=person.chat_id,
+                            media=slides,
+                            reply_to_message_id=update.message.id,
+                            caption=post.caption)
 
                     elif post.typename == "GraphImage":
-                        await context.bot.send_photo(chat_id=person.chat_id, photo=post.url)
+                        # -------------------- Received link was a single photo
+                        await context.bot.send_photo(
+                            chat_id=person.chat_id,
+                            photo=post.url,
+                            reply_to_message_id=update.message.id,
+                            caption=post.caption)
 
                     else:
+                        # -------------------- Received link was an unknown post
                         print(post.typename)
 
                 except ConnectionException:
-                    await context.bot.send_message(chat_id=person.chat_id,
-                                                   text="There was somthing wrong with instagram server. "
-                                                        "you need to login again.\n"
-                                                        "please send your instagram username.")
                     edit(Person, person.id, progress={"name": "INS_REG", "value": "INS_UNAME"}, session=None)
+                    await context.bot.send_message(
+                        chat_id=person.chat_id,
+                        text="There was somthing wrong with instagram server. "
+                             "you need to login again.\n"
+                             "please send your instagram username.")
 
                 except Exception as e:
                     print('main: ' + red(str(e)))
