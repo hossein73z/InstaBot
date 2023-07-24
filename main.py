@@ -1,5 +1,4 @@
 import re
-import traceback
 
 import instaloader
 import telegram.error
@@ -25,17 +24,19 @@ async def process(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         progress = person.progress
 
-        text = check_progress(progress, person, update)
-        try:
-            await context.bot.send_message(chat_id=person.chat_id, text=text)
-        except Exception as e:
-            print('main: ' + red(str(e)))
-
+        # If the received message is password, Delete it for security reason
         if progress["name"] == 'INS_REG' and progress["value"] == "INS_PASS":
             try:
                 await context.bot.deleteMessage(chat_id=person.chat_id, message_id=update.message.id)
             except Exception as e:
                 print('main: ' + red(str(e)))
+
+        # Check user progress and get new message text from 'check_progress' function
+        text = check_progress(progress, person, update)
+        try:
+            await context.bot.send_message(chat_id=person.chat_id, text=text)
+        except Exception as e:
+            print('main: ' + red(str(e)))
 
     else:  # -------------------- User have no unfinished progress
         re_match = re.match(
@@ -70,6 +71,9 @@ async def process(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                                                      reply_to_message_id=update.message.id)
                         await context.bot.sendVideo(chat_id=person.chat_id, video=post.video_url,
                                                     reply_to_message_id=update.message.id)
+
+                    elif post.typename == "GraphImage":
+                        await context.bot.send_photo(chat_id=person.chat_id, photo=post.url)
 
                     else:
                         print(post.typename)
